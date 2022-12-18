@@ -1,0 +1,36 @@
+{
+    "manifest_version": 2,
+    "name": "StreamCatcher",
+    "short_name": "StreamCatcher",
+    "version": "0.1",
+    "description": "For use with Kodi. Detects potential video requests made by the browser and lets you send them to Kodi",
+    "author": "doko-desuka",
+    "homepage_url": "https://github.com/doko-desuka",
+    "minimum_chrome_version": "66",
+    "icons": {
+        "16": "icon_16.png",
+        "32": "icon_32.png",
+        "48": "icon_48.png",
+        "128": "icon_128.png"
+    },
+    "browser_action": {
+        "default_title": "StreamCatcher",
+        "default_popup": "popup.html",
+        "default_icon": {
+            "16": "icon_16.png",
+            "32": "icon_32.png",
+            "48": "icon_48.png",
+            "128": "icon_128.png"
+        },
+        "browser_style": true
+    },
+    "permissions": [
+        "tabs",
+        "webRequest",
+        "webRequestBlocking",
+        "<all_urls>"
+    ],
+    "background": {
+        "page": "background.html"
+    }
+}
