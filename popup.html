@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+    html, body {
+        margin: 0;
+        padding: 0;
+        max-width: 500px;
+    }
+    ul {
+        list-style-type: none;
+        padding: 0;
+        margin: 0;
+        overflow: hidden;
+        /* white-space: nowrap; */
+    }
+    li {
+        font-size: 1.3em;
+        cursor: pointer;
+        padding: 6px;
+        /* border: 1px solid black; */
+        background-color: #e8e8e8;
+    }
+    li:not(:last-child) {
+        margin-bottom: 6px;
+    }
+    li:hover {
+        background-color: #fff078;
+    }
+    .ui-control {
+        padding: 6px;
+        display: block;
+        margin: 0 auto;
+    }
+    div {
+        border: inset gray;
+        padding: 6px;
+        text-align: center;
+    }
+    </style>
+</head>
+<body>
+    <ul title="List of captured requests, click on a request to send it to Kodi" id="requests">
+    <!-- To debug the CSS.
+        <li><b>M3U8:</b> https://website.com/some/path/index.m3u8</li>
+    -->
+    </ul>
+    <div>
+        <!-- The default values of the host and port inputs are defined in 'background.js' -->
+        <input class="ui-control" title="Address of the Kodi server" type="text" id="hostInput">
+        <input class="ui-control" title="Port of the Kodi server" type="text" id="portInput">
+        <label class="ui-control">
+            <input title="Block captured requests from reaching their destination (default: on)" type="checkbox" id="blockingCheckbox" checked>Block Captured Requests
+        </label>
+    </div>
+    <script src="popup.js" type="module"></script>
+</body>
+</html>
