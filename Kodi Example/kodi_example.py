@@ -74,19 +74,21 @@ def playStreamCatcher():
 
     if outputDict:
         if outputDict['data']:
-            version, url, mimeType, headerParams = outputDict['data'].split('\n')
+            version, url, mimeType, headerParams = outputData.split('\n')
+            headers = dict(parse_qsl(headerParams))
+            # Debug:
+            #xbmcLog('StreamCatcher >> prepareStreamData:', '>'+outputData+'<')
             if version.startswith('streamcatcher/'):
-                headers = dict(parse_qsl(headerParams))
-                # Debug:
-                #xbmcLog('StreamCatcher Data:', version, url, mimeType, headers)
-
                 # Clean up the incoming headers.
-
-                if ('Accept-Encoding' in headers and ADDON.getSetting('streamcatcher.removeBrotli') == 'true':
-                    headers['Accept-Encoding'] = 'gzip, deflate'
+                if (ADDON.getSetting('streamcatcher.removeBR') == 'true'):
+                    # Remove the Brötli "br" encoding, if asked for.
+                    if 'Accept-Encoding' in headers:
+                        headers['Accept-Encoding'] = 'gzip, deflate'
+                    elif 'accept-encoding' in headers:
+                        headers['accept-encoding'] = 'gzip, deflate'
                 headers.pop('TE', None)
                 headers.pop('Host', None)
-                headers.pop('Range', None)
+                headers.pop('Range', None) # Very important to delete this, so Kodi's FFMpeg inserts its own.
                 headers.pop('Cookie', None)
 
                 session = requests.Session()
@@ -99,9 +101,11 @@ def playStreamCatcher():
                 item.setMimeType(mimeType)
                 item.setContentLookup(False)
                 return xbmcplugin.setResolvedUrl(PLUGIN_ID, True, item)
+            else:
+                return showInfo('StreamCatcher: unexpected browser extension payload')
         elif outputDict['message']:
             showInfo(outputDict['message'])
-    return xbmcplugin.setResolvedUrl(PLUGIN_ID, False, LISTITEM())
+    return xbmcplugin.setResolvedUrl(PLUGIN_ID, False   , LISTITEM())
 
 
 # Add HTTP headers for Kodi to use when it asks FFMpeg to play the media.

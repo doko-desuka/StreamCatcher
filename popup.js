@@ -14,6 +14,11 @@ function sendBackgroundMessage(payload, callback) {
 }
 
 
+function clearRequestsList() {
+    document.getElementById('requests').innerHTML = '<li>(Nothing captured yet)</li>';
+}
+
+
 function sendJSONRPC() {
     // Send data to Kodi using the Beacon API (as XMLHttpRequest and fetch() can't
     // be used because of browser restrictions).
@@ -94,7 +99,13 @@ function onRefresh(streamCatcher) {
             // Create an <li> item to represent this captured request.
             const li = document.createElement('li');
             const formatMatch = request.url.match(FORMATS_PATTERN);
-            li.innerHTML = '<b>' + (formatMatch ? formatMatch[1].toUpperCase() : '???') + ':</b> ' + request.url
+            let formatLabel;
+            if (formatMatch) {
+                formatLabel = formatMatch[1].toUpperCase();
+            } else {
+                formatLabel = request.mimeType == 'video/mp4' ? 'MP4' : 'M3U8';
+            }
+            li.innerHTML = '<b>' + formatLabel + ':</b> ' + request.url
             li.dataset.url          = request.url;
             li.dataset.headerParams = request.headerParams;
             li.dataset.mimeType     = request.mimeType;
@@ -102,7 +113,7 @@ function onRefresh(streamCatcher) {
             ul.appendChild(li);
         }
     } else {
-        ul.innerHTML = '<li>(Nothing captured yet)</li>';
+        clearRequestsList();
     }
     const settings = streamCatcher.settings;
     // Connect the inputs to handlers, and set their default/current values.
@@ -121,10 +132,16 @@ function onRefresh(streamCatcher) {
     portInput.addEventListener('change', (event) => {
         sendBackgroundMessage({type: 'set.settings', data: {port: event.target.value}});
     });
-    const blockingCheckbox = document.getElementById('blockingCheckbox')
+    const blockingCheckbox = document.getElementById('blockingCheckbox');
     blockingCheckbox.checked = settings.useBlocking;
     blockingCheckbox.addEventListener('change', (event) => {
         sendBackgroundMessage({type: 'set.settings', data: {useBlocking: event.target.checked}});
+    });
+    const clearButton = document.getElementById('clearButton');
+    clearButton.addEventListener('click', (event) => {
+        // Clear the items from the <ul> and the captured requests.
+        clearRequestsList();
+        sendBackgroundMessage({type: 'clear.requests'});
     });
 }
 

@@ -3,6 +3,7 @@
 // button, inside the info box for this extension (the extension needs to be loaded of course).
 // Any calls you make to console.log() or console.dir() will not go to the DevTools console, but
 // that console in the inspection window.
+// Uncomment the console.log() and console.dir() calls to see relevant debug messages.
 
 // Relevant projects:
 // - https://github.com/puemos/hls-downloader
@@ -11,7 +12,7 @@
 'use strict';
 
 
-import { FORMATS_PATTERN, isChrome } from './utils.js';
+import { isChrome } from './utils.js';
 
 
 // Session storage.
@@ -26,13 +27,48 @@ window.streamCatcher = {
         // Default values for the host and port that Kodi is supposedly listening to.
         // When an item is clicked on the <ul> in popup.html, a request will be sent
         // to this address.
-        host: '192.168.0.13',
+        host: '192.168.0.13', // <-- CHANGE this, use your Kodi device's static local IP.
         port: '8080',
         useBlocking: true
     }
 };
 
 const CANCEL_REQUEST = {cancel: true};
+
+
+function clearCapturedRequests() {
+    for (let urlKey in window.streamCatcher.capturedRequests) {
+        delete window.streamCatcher.capturedRequests[urlKey];
+    }
+    // Reset the text of the little notification badge.
+    chrome.browserAction.setBadgeText({text: null});
+}
+
+
+function isRangeHeader(header) {
+    return (header.name == 'Range' || header.name == 'range');
+}
+
+
+// Called on outgoing requests. Estimates their MIME-type based on the URL string and headers.
+// Returns either a string with the MIME-type (eg. "video/mp4" or "application/x-mpegURL") or
+// returns null if it could not be estimated or isn't considered a media item.
+function detectMIMEType(details) {
+    const lowerURL = details.url.toLowerCase();
+    if (details.type == 'xmlhttprequest') {
+        // The request is being sent either by the XMLHttpRequest or Fetch APIs.
+        // Note: this "hls" pattern was added because of the HQQ hoster, the only
+        // way of knowing if it's the playlist request or not.
+        if (lowerURL.includes('m3u8') || lowerURL.includes('hls')) {
+            return 'application/x-mpegURL';
+        }
+    } else {
+        if (lowerURL.includes('mp4') || details.requestHeaders.some(isRangeHeader)) {
+            return 'video/mp4';
+        }
+    }
+    return null;
+}
 
 
 function isStreamContentType(lowercaseText) {
@@ -56,16 +92,8 @@ function blockIfNeeded() {
 
 
 function catchStream(details, mimeType, isResponse) {
-    // Don't store repeated captures.
-    if (isAlreadyCaptured(details.url)) {
-        // Debug:
-        //console.log('catchStream >> blocked repeated', details.url);
-        return blockIfNeeded();
-    }
-
     // Client request headers to send to Kodi.
     const relevantHeaders = {};
-
     if (isResponse) {
         // TODO
         // Coming in from the responses listener.
@@ -89,6 +117,7 @@ function catchStream(details, mimeType, isResponse) {
             relevantHeaders[details.requestHeaders[i].name] = details.requestHeaders[i].value;
         }
     }
+    // Create the capture info object and store it in the background window memory storage.
     const newCapture = {
         url: details.url,
         mimeType: mimeType,
@@ -99,8 +128,7 @@ function catchStream(details, mimeType, isResponse) {
     chrome.browserAction.setBadgeText({text: totalCaptures.toString()});
 
     // Debug:
-    //console.log('catchStream(), mimeType, 'isResponse:', isResponse');
-    //console.dir(details, newCapture);
+    //console.log('catchStream:', details.url, mimeType, details);
 
     // Always return a BlockingResponse to cancel the browser request/response.
     return blockIfNeeded();
@@ -132,8 +160,7 @@ chrome.webRequest.onHeadersReceived.addListener(
     (details) => {
         // Don't repeat captured requests.
         if (isAlreadyCaptured(details.url)) {
-            // Debug:
-            //console.log('onHeadersReceived >> blocked repeated', details.url);
+            console.log('onHeadersReceived >> repeated request:', details.url);
             return blockIfNeeded();
         }
         for (let i = 0; i < details.responseHeaders.length; ++i) {
@@ -141,8 +168,7 @@ chrome.webRequest.onHeadersReceived.addListener(
             if (details.responseHeaders[i].name.toLowerCase() == 'content-type') {
                 // If the response is for video content then capture it.
                 if (isStreamContentType(details.responseHeaders[i].value.toLowerCase())) {
-                    const mimeType = details.responseHeaders[i].value;
-                    return catchStream(details, mimeType, true);
+                    return catchStream(details, true);
                 } else {
                     // This isn't video content, let the response pass through.
                     return;
@@ -159,29 +185,35 @@ chrome.webRequest.onHeadersReceived.addListener(
 // Allow this listener to block the request if needed, and have HTTP headers present in the
 // 'details' argument.
 // The "extraHeaders" flag is for Chrome only, explained in here: https://stackoverflow.com/a/59589723
+function onBeforeSendHeaders(details) {
+    // All media / playlist requests are GETs.
+    // TODO: support POSTs too? What if the video hoster returns the .m3u8 playlist
+    // after a POST request? It wouldn't get detected as it is.
+    /*if (details.method != 'GET') {
+        return;
+    }*/
+
+    // Block repeated requests if the stream was already captured.
+    // Some JavaScript players try to send repeated attempts on failure.
+    if (isAlreadyCaptured(details.url)) {
+        // Debug:
+        //console.log('onBeforeSendHeaders >> repeated request:', details.url);
+        return blockIfNeeded();
+    }
+    // If this request passes some media tests, it's probably something we should
+    // capture.
+    const mediaMIMEType = detectMIMEType(details);
+    if (mediaMIMEType) {
+        return catchStream(details, mediaMIMEType, false);
+    }
+    // Debug uncaptured requests, as the function didn't reach the catchStream() call above:
+    //console.log(details);
+}
 const extraInfoSpec = (isChrome()) ?
     ["blocking", "requestHeaders", "extraHeaders"]
     : ["blocking", "requestHeaders"];
 chrome.webRequest.onBeforeSendHeaders.addListener(
-    (details) => {
-        // Block repeated requests if the stream was already captured.
-        // Some JavaScript players try to send repeated attempts on failure.
-        if (isAlreadyCaptured(details.url)) {
-            // Debug:
-            //console.log('onBeforeSendHeaders >> blocked repeated', details.url);
-            return blockIfNeeded();
-        }
-        // See if this request is for obvious video data, with URLs that contain the
-        // extension at some point in the string.
-        const extMatch = details.url.match(FORMATS_PATTERN);
-        if (extMatch) {
-            const mimeType = (extMatch[1].toLowerCase() == 'm3u8') ?
-                             'application/x-mpegURL'
-                             : 'video/' + extMatch[1].toLowerCase().replace('ogv', 'ogg')
-                                                                   .replace('3gp', '3gpp');
-            return catchStream(details, mimeType, false);
-        }
-    },
+    onBeforeSendHeaders,
     {types: ['media', 'xmlhttprequest'], urls: ['<all_urls>']}, extraInfoSpec
 );
 
@@ -197,11 +229,7 @@ function onTabUpdate(tabID, changeInfo) {
         && !changeInfo.url.includes('extension://')
         && !changeInfo.url.includes('chrome://')
         && !changeInfo.url.includes('about:blank')) {
-        for (let urlKey in window.streamCatcher.capturedRequests) {
-            delete window.streamCatcher.capturedRequests[urlKey];
-        }
-        // Reset the text of the little notification badge.
-        chrome.browserAction.setBadgeText({text: null});
+        clearCapturedRequests();
     }
 }
 if (isChrome()) {
@@ -216,7 +244,7 @@ if (isChrome()) {
 // This is the only way to support this extension working on private/incognito tabs, because
 // the 'chrome.extension.getBackgroundPage()' function that can be used to access the
 // environment of this background script will NOT work on private tabs, only normal tabs.
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+function onMessage(request, sender, sendResponse) {
     if (request.type == 'get.everything') {
         if (isChrome()) {
             sendResponse(window.streamCatcher);
@@ -224,6 +252,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         } else {
             return Promise.resolve(window.streamCatcher);
         }
+    } else if (request.type == 'clear.requests') {
+        clearCapturedRequests();
     } else if (request.type == 'set.settings') {
         if (request.data) {
             Object.keys(request.data).forEach(
@@ -235,7 +265,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             );
         }
     }
-});
+}
+chrome.runtime.onMessage.addListener(onMessage);
 
 // Set the default background and text colors of the little notification badge.
 chrome.browserAction.setBadgeBackgroundColor({color:'#ffff00'});

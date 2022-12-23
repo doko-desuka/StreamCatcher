@@ -2,7 +2,7 @@
     "manifest_version": 2,
     "name": "StreamCatcher",
     "short_name": "StreamCatcher",
-    "version": "0.1",
+    "version": "0.2",
     "description": "For use with Kodi. Detects potential video requests made by the browser and lets you send them to Kodi",
     "author": "doko-desuka",
     "homepage_url": "https://github.com/doko-desuka",
