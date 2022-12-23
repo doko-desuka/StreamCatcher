@@ -75,10 +75,8 @@ def playStreamCatcher():
     if outputDict:
         if outputDict['data']:
             version, url, mimeType, headerParams = outputData.split('\n')
-            headers = dict(parse_qsl(headerParams))
-            # Debug:
-            #xbmcLog('StreamCatcher >> prepareStreamData:', '>'+outputData+'<')
             if version.startswith('streamcatcher/'):
+                headers = dict(parse_qsl(headerParams))
                 # Clean up the incoming headers.
                 if (ADDON.getSetting('streamcatcher.removeBR') == 'true'):
                     # Remove the Brötli "br" encoding, if asked for.
